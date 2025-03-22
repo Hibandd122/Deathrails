@@ -2,14 +2,17 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local camera = Workspace.CurrentCamera
 
 -- Biến toàn cục
 local noclipOn = true
 local promptsFar = true
+local fullBright = true
 local floatName = "HumanoidRootPart"
 local farPromptDistance = 20
 local defaultPromptDistance = 10
@@ -157,13 +160,42 @@ local function applyFarPrompts(enable)
     end
 end
 
--- Vòng lặp PromptsFar
+-- Vòng lặp PromptsFar (chậm 3 giây)
 local function promptsFarLoop()
     while promptsFar do
         applyFarPrompts(true)
-        task.wait(0.1)
+        task.wait(3) -- Chậm lại 3 giây
     end
     applyFarPrompts(false)
+end
+
+-- Hàm làm màn hình trắng và bật FullBright để giảm lag
+local function applyWhiteScreenAndFullBright()
+    -- FullBright
+    Lighting.Brightness = 10 -- Tăng độ sáng lên rất cao
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+    Lighting.FogStart = 0
+    Lighting.FogColor = Color3.fromRGB(255, 255, 255) -- Đặt sương mù màu trắng
+    
+    -- Làm màn hình trắng
+    camera.FieldOfView = 1 -- Giảm góc nhìn để tạo hiệu ứng trắng gần như toàn màn hình
+    for _, part in pairs(Workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= floatName then
+            part.Transparency = 1 -- Ẩn tất cả các đối tượng
+        elseif part:IsA("Decal") or part:IsA("Texture") then
+            part.Transparency = 1 -- Ẩn các texture/decal
+        end
+    end
+end
+
+-- Vòng lặp duy trì màn hình trắng và FullBright
+local function whiteScreenLoop()
+    while fullBright do
+        applyWhiteScreenAndFullBright()
+        task.wait(0.1)
+    end
 end
 
 -- Xử lý khi nhân vật tái sinh
@@ -182,6 +214,7 @@ end)
 -- Tự động bật các chức năng
 ToggleNoclip()  -- Bật Noclip
 task.spawn(main)  -- Bật AutoWin
-task.spawn(promptsFarLoop)  -- Bật PromptsFar
+task.spawn(promptsFarLoop)  -- Bật PromptsFar (chậm 3 giây)
+task.spawn(whiteScreenLoop)  -- Bật màn hình trắng và FullBright
 
-print("Script đã chạy: Noclip, AutoWin, và PromptsFar đã được bật!")
+print("Script đã chạy: Noclip, AutoWin, PromptsFar, và WhiteScreen (FullBright) đã được bật!")
