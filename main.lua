@@ -153,12 +153,13 @@ local function applyFarPrompts(enable)
                 end
                 prompt.MaxActivationDistance = farPromptDistance
                 
-                -- Tự động nhấn Prompt nếu trong phạm vi
-                local character = player.Character
+                -- Tự động kích hoạt Prompt nếu trong phạm vi
+                local character = game.Players.LocalPlayer.Character
                 local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
+                if rootPart and prompt.Parent and prompt.Parent:IsA("BasePart") then
                     local distance = (rootPart.Position - prompt.Parent.Position).Magnitude
                     if distance <= farPromptDistance then
+                        print("🔥 Đang kích hoạt Prompt: " .. prompt.Parent.Name)
                         fireproximityprompt(prompt)
                     end
                 end
@@ -173,10 +174,13 @@ end
 
 -- Vòng lặp để liên tục áp dụng khi bật PromptsFar
 local function promptsFarLoop()
-    while promptsFar and promptsFarLoopRunning do
+    if promptsFarLoopRunning then return end  -- Tránh tạo nhiều vòng lặp
+    promptsFarLoopRunning = true
+    while promptsFar do
         applyFarPrompts(true)
         task.wait(0.1)  -- Cập nhật mỗi 0.1 giây để áp dụng cho Prompts mới và tự động nhấn
     end
+    applyFarPrompts(false)
     promptsFarLoopRunning = false
 end
 -- Hàm bật/tắt noclip
