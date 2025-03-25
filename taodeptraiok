@@ -1,0 +1,175 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+local teleportZones = {
+    workspace.TeleportZones.TeleportZone,
+    workspace.TeleportZones.TeleportZone1,
+    workspace.TeleportZones.TeleportZone2,
+    workspace.TeleportZones.TeleportZone3
+}
+
+-- Cài đặt tốc độ đi bộ
+local walkSpeed = 18.75
+
+-- Hàm tạo tween di chuyển (chỉ di chuyển X-Z, giữ nguyên Y nếu cần)
+local function tweenToPosition(targetPosition)
+    if humanoid and humanoidRootPart then
+        local currentPos = humanoidRootPart.Position
+        local adjustedTarget = Vector3.new(targetPosition.X, currentPos.Y, targetPosition.Z)
+        local distance = (adjustedTarget - currentPos).Magnitude
+        local duration = distance / walkSpeed
+        
+        local tweenInfo = TweenInfo.new(
+            duration,
+            Enum.EasingStyle.Linear,
+            Enum.EasingDirection.Out,
+            0,
+            false,
+            0
+        )
+        
+        local tween = TweenService:Create(humanoidRootPart, tweenInfo, {
+            CFrame = CFrame.new(adjustedTarget)
+        })
+        
+        tween:Play()
+        return tween
+    end
+    return nil
+end
+
+local function getCurrentTeleportZone()
+    for _, zone in ipairs(teleportZones) do
+        if zone.PrimaryPart then
+            local zonePos = zone.PrimaryPart.Position
+            local distance = (humanoidRootPart.Position - zonePos).Magnitude
+            local zoneSize = zone.PrimaryPart.Size
+            if distance < (zoneSize.Magnitude / 2) then
+                return zone
+            end
+        end
+    end
+    return nil
+end
+
+local function findNearestTeleportZone()
+    local nearestZone = nil
+    local minDistance = math.huge
+
+    for _, zone in ipairs(teleportZones) do
+        local stateLabel = zone:FindFirstChild("BillboardGui") and zone.BillboardGui:FindFirstChild("StateLabel")
+        local zonePosition = zone.PrimaryPart and zone.PrimaryPart.Position
+
+        if stateLabel and stateLabel.Text == "Waiting for players..." and zonePosition then
+            local distance = (humanoidRootPart.Position - zonePosition).Magnitude
+            if distance < minDistance then
+                minDistance = distance
+                nearestZone = zone
+            end
+        end
+    end
+
+    return nearestZone
+end
+
+local function createParty()
+    while true do
+        local args = {
+            [1] = { ["maxPlayers"] = 1 }
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("RemotePromise"):WaitForChild("Remotes"):WaitForChild("C_CreateParty"):FireServer(unpack(args))
+        task.wait(1)
+    end
+end
+
+local function moveToTeleportZone()
+    local currentZone = getCurrentTeleportZone()
+    local partyTask = nil
+    local currentTween = nil
+
+    if currentZone then
+        return true
+    end
+
+    local timeout = 20
+    local elapsedTime = 0
+
+    partyTask = task.spawn(createParty)
+
+    while elapsedTime < timeout do
+        currentZone = getCurrentTeleportZone()
+        
+        if currentZone then
+            if currentTween then
+                currentTween:Cancel()
+            end
+            if partyTask then
+                task.cancel(partyTask)
+            end
+            return true
+        end
+
+        local nearestZone = findNearestTeleportZone()
+
+        if nearestZone then
+            local zonePosition = nearestZone.PrimaryPart.Position
+            local distance = (humanoidRootPart.Position - zonePosition).Magnitude
+            local zoneSize = nearestZone.PrimaryPart.Size
+            local threshold = zoneSize.Magnitude / 2
+
+            if distance > threshold then
+                if currentTween then
+                    currentTween:Cancel()
+                end
+                currentTween = tweenToPosition(zonePosition)
+                
+                while currentTween and currentTween.PlaybackState == Enum.PlaybackState.Playing do
+                    local updatedNearestZone = findNearestTeleportZone()
+                    if updatedNearestZone ~= nearestZone then
+                        currentTween:Cancel()
+                        break
+                    end
+                    task.wait(0.1)
+                end
+                task.wait(0.2)
+            else
+                if currentTween then
+                    currentTween:Cancel()
+                end
+                if partyTask then
+                    task.cancel(partyTask)
+                end
+                task.wait(0.2)
+                return true
+            end
+        end
+
+        task.wait(1)
+        elapsedTime += 1
+    end
+
+    if currentTween then
+        currentTween:Cancel()
+    end
+    if partyTask then
+        task.cancel(partyTask)
+    end
+    return false
+end
+
+local function teleportSequence()
+    local foundZone = moveToTeleportZone()
+
+    if foundZone then
+        print("Đã hoàn thành toàn bộ quy trình!")
+    else
+        print("Không thể tìm thấy TeleportZone hợp lệ!")
+    end
+end
+
+task.spawn(teleportSequence)
